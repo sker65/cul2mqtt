@@ -10,6 +10,10 @@
 - **`--only`** (`CUL2MQTT_ONLY`) and **`--ignore`** (`CUL2MQTT_IGNORE`): protocols or devices
   (`uniroll`, `em/0205`, `fht`, `fs20/6C4800`) cul2mqtt handles exclusively, or neither publishes
   nor sends to — for moving devices over from another central such as FHEM one at a time.
+- **FS20 covers**: `--fs20-devices` entries with `"type": "cover"` (FS20 RSU and other shutter /
+  awning actuators) become optimistic HA covers. `open` / `close` map to an FS20 command each
+  (`on` / `off` by default), `stop` repeats the running direction, which stops these actuators;
+  `device_class` and an optional `run_time` per device.
 - Docker: state in a `/data` volume (`CUL2MQTT_STATE_DIR`), `docker-compose.example.yml`.
 
 ### Changed

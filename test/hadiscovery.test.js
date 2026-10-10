@@ -435,3 +435,40 @@ describe("UNIRoll discovery", () => {
     );
   });
 });
+
+describe("FS20 cover discovery", () => {
+  test("an FS20 cover is an optimistic cover without timers", () => {
+    const [, cover] = discoveryModel({
+      name: "cul",
+      items: new Map(),
+      fs20Devices: [{ name: "Awning", address: "6c4800", type: "cover", device_class: "awning" }],
+    });
+    assert.equal(cover.id, "cul2mqtt_cul_fs20_6C4800");
+    assert.equal(cover.device.mdl, "FS20");
+    assert.deepEqual(Object.keys(cover.components), ["cover"]);
+    const c = cover.components.cover;
+    assert.equal(c.p, "cover");
+    assert.equal(c.dev_cla, "awning");
+    assert.equal(c.cmd_t, "cul/set/fs20/6C4800");
+    assert.equal(c.pl_open, "open");
+    assert.equal(c.pl_cls, "close");
+    assert.equal(c.pl_stop, "stop");
+    assert.equal(c.opt, true);
+    assert.equal(c.stat_t, undefined);
+  });
+
+  test("the device class defaults to shutter and is read from normalised definitions", () => {
+    const [, plain] = discoveryModel({
+      name: "cul",
+      items: new Map(),
+      fs20Devices: [{ name: "Shutter", address: "6C4800", type: "cover" }],
+    });
+    assert.equal(plain.components.cover.dev_cla, "shutter");
+    const [, normalised] = discoveryModel({
+      name: "cul",
+      items: new Map(),
+      fs20Devices: [{ name: "Awning", address: "6C4800", type: "cover", cover: { deviceClass: "awning" } }],
+    });
+    assert.equal(normalised.components.cover.dev_cla, "awning");
+  });
+});

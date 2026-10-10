@@ -334,6 +334,39 @@ Like FHEM's `sendStopBeforeCmd` (default `1`), a listed shutter gets a `stop` 10
 `set/uniroll/...` to an address that is not listed sends exactly what was asked. FHEM's channel is
 the device digit as is: `define … UNIRoll 1234 2` is address `12342`.
 
+### FS20 covers
+
+FS20 shutter and awning actuators such as the FS20 RSU have one command per direction, and
+repeating the command of a running movement stops it. List them in `--fs20-devices` with
+`"type": "cover"` to get a Home Assistant cover:
+
+```json
+[
+  {
+    "name": "Awning",
+    "address": "6C4800",
+    "type": "cover",
+    "open": "off",
+    "close": "on",
+    "device_class": "awning",
+    "run_time": 40
+  }
+]
+```
+
+| key            | default   |                                                                                |
+| -------------- | --------- | ------------------------------------------------------------------------------ |
+| `open`         | `on`      | FS20 command that opens (for an awning: extends)                               |
+| `close`        | `off`     | FS20 command that closes (retracts)                                            |
+| `device_class` | `shutter` | Home Assistant cover device class (`awning`, `blind`, `shade`, `shutter`, ...) |
+| `run_time`     | unknown   | seconds after which a movement counts as finished; without it, it never does   |
+
+`cul/set/fs20/<address>` then also takes `open`, `close` and `stop`. cul2mqtt remembers the
+direction it sent last: `stop` repeats it, `open` / `close` in the direction already running is not
+sent again (it would stop), and the other direction is sent as is. A movement started by a remote
+or by the actuator's own end stop is not seen; with `run_time` a later `stop` is skipped instead
+of starting the motor again. The state in Home Assistant is optimistic, as for every FS20 actuator.
+
 ### `cul/set/raw`
 
 With `--raw-set`, any culfw command line is written to the CUL (`F6C480011`, `X21`, ...). This is
@@ -407,7 +440,7 @@ device also has a **Sync time** button. It sends date and time only when explici
 never run automatically.
 
 FS20 actuators do not report back, so they cannot be discovered; list them in `--fs20-devices` to
-get switches or lights with an optimistic state. An FS20 remote appears as a device with one sensor
+get switches, lights or covers (see [FS20 covers](#fs20-covers)) with an optimistic state. An FS20 remote appears as a device with one sensor
 holding the last command. UNIRoll shutters listed in `--uniroll-devices` become covers.
 `--no-ha-discovery` disables discovery and removes all announcements on startup; `--ha-prefix`
 changes the discovery prefix.

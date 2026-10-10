@@ -10,6 +10,7 @@ import {fhtClockItems, fhtClockItemsFromValue, fhtMeasuredTemperature, itemsFor,
 import {commandFor, unirollSequence} from './lib/commands.js';
 import {fhtCommand, fhtRawCommand} from './lib/fht-command.js';
 import {optimisticFs20State} from './lib/fs20-state.js';
+import {coverAction, coverError, normaliseCover, trackCoverCommand} from './lib/fs20-cover.js';
 import {fs20TimerDuration, isValidFs20TimerDuration} from './lib/fs20-timer.js';
 import {discoveryModel, normalizedDiscoveryIds} from './lib/hadiscovery.js';
 import {OfflineTracker, timeoutsFromMap} from './lib/offline.js';
@@ -52,14 +53,18 @@ if (config.mapFile) {
 
 function normaliseFs20Devices(value) {
     const list = value === null ? [] : Array.isArray(value) ? value : [value];
-    return list.map((device) => ({
-        name: String(device?.name || '').trim(),
-        address: String(device?.address || '')
-            .trim()
-            .toUpperCase(),
-        type: String(device?.type || 'switch').toLowerCase(),
-        on_time: Number(device?.on_time) || 0,
-    }));
+    return list.map((device) => {
+        const type = String(device?.type || 'switch').toLowerCase();
+        return {
+            name: String(device?.name || '').trim(),
+            address: String(device?.address || '')
+                .trim()
+                .toUpperCase(),
+            type,
+            on_time: Number(device?.on_time) || 0,
+            ...(type === 'cover' && {cover: normaliseCover(device)}),
+        };
+    });
 }
 
 let fs20Devices;
@@ -112,6 +117,7 @@ function notIgnored(protocol, devices) {
 const fs20TimerValues = new Map();
 const fs20States = new Map();
 const fs20OffTimers = new Map();
+const fs20CoverMotion = new Map();
 const fhtInitialized = new Set();
 const fhtInitialising = new Set();
 const fhtStateFile = config.stateDir ? path.join(config.stateDir, 'fht-initialized.json') : null;
@@ -235,10 +241,21 @@ const {log, pubStatus} = adapter;
 function setFs20Devices(value) {
     const definitions = normaliseFs20Devices(value);
     const invalid = definitions.find(
-        (device) => !device.name || !/^[0-9A-F]{6}$/.test(device.address) || !['switch', 'light'].includes(device.type),
+        (device) =>
+            !device.name ||
+            !/^[0-9A-F]{6}$/.test(device.address) ||
+            !['switch', 'light', 'cover'].includes(device.type),
     );
     if (invalid) {
-        throw new Error('Each FS20 device needs a name, a 6-digit hexadecimal address, and switch or light type');
+        throw new Error(
+            'Each FS20 device needs a name, a 6-digit hexadecimal address, and switch, light or cover type',
+        );
+    }
+    for (const device of definitions) {
+        const error = device.cover && coverError(device.cover);
+        if (error) {
+            throw new Error(`FS20 cover ${device.address}: ${error}`);
+        }
     }
     const addresses = new Set();
     for (const device of definitions) {
@@ -266,7 +283,12 @@ function setFs20Devices(value) {
             fs20OffTimers.delete(address);
         }
     }
+    fs20CoverMotion.clear();
     for (const device of definitions) {
+        if (device.type === 'cover') {
+            // no state and no timers: a cover runs optimistically in Home Assistant
+            continue;
+        }
         if (!fs20TimerValues.has(device.address)) {
             fs20TimerValues.set(device.address, normalizedTimerValues(null, device.on_time));
         }
@@ -427,7 +449,7 @@ async function handleSet(parts, value, topic) {
     }
     if (String(parts[0]).toLowerCase() === 'fs20' && parts.length === 3 && fs20TimerIndex(parts[2]) !== undefined) {
         const address = String(parts[1]).trim().toUpperCase();
-        if (!fs20DeviceByAddress.has(address)) {
+        if (!fs20TimerDevice(address)) {
             log.warn('mqtt set fs20 timer: unknown configured FS20 address', address);
             return;
         }
@@ -452,7 +474,7 @@ async function handleSet(parts, value, topic) {
         /^[1-5]$/.test(parts[3])
     ) {
         const address = String(parts[1]).trim().toUpperCase();
-        if (!fs20DeviceByAddress.has(address)) {
+        if (!fs20TimerDevice(address)) {
             log.warn('mqtt set fs20 timed-on button: unknown configured FS20 address', address);
             return;
         }
@@ -467,6 +489,21 @@ async function handleSet(parts, value, topic) {
         }
         const command = commandFor(['fs20', address], {cmd: 'on-for-timer', time: seconds});
         log.info('FS20 timer button', address, 'slot', slot, 'pressed for', seconds, 'seconds');
+        return sendFs20(command);
+    }
+    const cover = fs20Cover(parts, value);
+    if (cover) {
+        const {address, definition, action} = cover;
+        const {cmd, reason} = coverAction(definition.cover, action, fs20CoverMotion.get(address));
+        if (!cmd) {
+            log.info('FS20 cover', address, action, '- not sending:', reason);
+            return;
+        }
+        if (!cul || !cul.connected) {
+            throw new Error('cul not connected');
+        }
+        const command = commandFor(['fs20', address], cmd);
+        log.info('cul > FS20', command.housecode, command.address, cmd, `(cover ${action})`);
         return sendFs20(command);
     }
     if (String(parts[0]).toLowerCase() === 'fht' && parts.length === 3 && parts[2] === 'sync-time') {
@@ -611,12 +648,37 @@ async function initialiseFht(address) {
     }
 }
 
+/** A configured FS20 switch or light (covers have no timers). */
+function fs20TimerDevice(address) {
+    const definition = fs20DeviceByAddress.get(address);
+    return definition && definition.type !== 'cover' ? definition : undefined;
+}
+
+/** set/fs20/<address> open|close|stop to a configured cover, as Home Assistant sends it. */
+function fs20Cover(parts, value) {
+    if (String(parts[0]).toLowerCase() !== 'fs20' || parts.length !== 2) {
+        return;
+    }
+    const address = String(parts[1]).trim().toUpperCase();
+    const definition = fs20DeviceByAddress.get(address);
+    const action = String(value?.val ?? value)
+        .trim()
+        .toLowerCase();
+    if (definition?.type === 'cover' && ['open', 'close', 'stop'].includes(action)) {
+        return {address, definition, action};
+    }
+}
+
 async function sendFs20(command) {
     const address = `${command.housecode}${command.address}`.replace(/\s+/g, '').toUpperCase();
     const definition = fs20DeviceByAddress.get(address);
     const {cmd, time} = command;
     await cul.cmd('FS20', command.housecode, command.address, cmd, time);
     if (!definition) {
+        return;
+    }
+    if (definition.type === 'cover') {
+        fs20CoverMotion.set(address, trackCoverCommand(definition.cover, cmd, fs20CoverMotion.get(address)));
         return;
     }
     const item = `fs20/${address}/state`;

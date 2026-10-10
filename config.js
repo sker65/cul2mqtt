@@ -43,7 +43,7 @@ export const OPTIONS = {
     'fs20-devices': {
         type: 'string',
         default: '[]',
-        describe: 'JSON array of explicit FS20 switch/light definitions (name, address, type)',
+        describe: 'JSON array of explicit FS20 switch/light/cover definitions (name, address, type)',
     },
     'uniroll-devices': {
         type: 'string',
