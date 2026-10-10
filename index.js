@@ -15,6 +15,7 @@ import {discoveryModel, normalizedDiscoveryIds} from './lib/hadiscovery.js';
 import {OfflineTracker, timeoutsFromMap} from './lib/offline.js';
 import {handle as handleInstall} from './lib/install.js';
 import {discoveryHint} from './lib/discovery.js';
+import {isIgnored, parseIgnore, setIgnored} from './lib/ignore.js';
 
 /*
  * finding the stick (core B-2): --discover lists the busware sticks udev named, --serialport auto
@@ -67,6 +68,44 @@ try {
     throw new Error(`invalid --fs20-devices JSON: ${err.message}`);
 }
 let fs20DeviceByAddress = new Map();
+
+const ignore = parseIgnore(config.ignore);
+const only = parseIgnore(config.only, '--only');
+/** --ignore / --only: devices cul2mqtt leaves alone */
+const leftAlone = (protocol, address) => isIgnored(protocol, address, ignore, only);
+
+let unirollDevices;
+try {
+    unirollDevices = normaliseUnirollDevices(JSON.parse(config.unirollDevices || '[]'));
+} catch (err) {
+    throw new Error(`invalid --uniroll-devices: ${err.message}`);
+}
+
+function normaliseUnirollDevices(value) {
+    const list = value === null ? [] : Array.isArray(value) ? value : [value];
+    const devices = list.map((device) => ({
+        name: String(device?.name || '').trim(),
+        address: String(device?.address || '')
+            .trim()
+            .toUpperCase(),
+    }));
+    const addresses = new Set();
+    for (const device of devices) {
+        if (!device.name || !/^[0-9A-F]{5}$/.test(device.address)) {
+            throw new Error('each UNIRoll device needs a name and a 5-digit hexadecimal address (group + device)');
+        }
+        if (addresses.has(device.address)) {
+            throw new Error(`duplicate UNIRoll address ${device.address}`);
+        }
+        addresses.add(device.address);
+    }
+    return devices;
+}
+
+/** Explicit devices without the ignored ones: --ignore wins over a definition. */
+function notIgnored(protocol, devices) {
+    return devices.filter((device) => !leftAlone(protocol, device.address));
+}
 const fs20TimerValues = new Map();
 const fs20States = new Map();
 const fs20OffTimers = new Map();
@@ -116,7 +155,7 @@ function clearLegacyDiscoveryTopics(devices) {
         return;
     }
     const activeIds = new Set(devices.map((device) => device.id));
-    const normalizedIds = normalizedDiscoveryIds({name: config.name, items: seen, fs20Devices});
+    const normalizedIds = normalizedDiscoveryIds({name: config.name, items: seen, fs20Devices, unirollDevices});
     for (const id of normalizedIds) {
         if (!id || activeIds.has(id) || clearedNormalizedDiscoveryIds.has(id)) {
             continue;
@@ -138,6 +177,7 @@ function restoreFhtStatus(parts, payload) {
     const rawItem = `fht/${address}/${field}`;
     const value = payload && typeof payload === 'object' && Object.hasOwn(payload, 'val') ? payload.val : payload;
     if (value === undefined || value === null || value === '') return;
+    if (leftAlone('fht', address)) return;
 
     if (FHT_CLOCK_FIELDS.has(field)) {
         for (const item of fhtClockItemsFromValue(address, field, value, fhtClockParts)) {
@@ -166,7 +206,8 @@ const adapter = createAdapter({
             name: config.name,
             items: seen,
             jsonPayloads: config.jsonPayloads,
-            fs20Devices,
+            fs20Devices: notIgnored('fs20', fs20Devices),
+            unirollDevices: notIgnored('uniroll', unirollDevices),
         });
         clearLegacyDiscoveryTopics(devices);
         return devices;
@@ -242,6 +283,27 @@ function setFs20Devices(value) {
 
 loadFs20Timers();
 setFs20Devices(fs20Devices);
+for (const [protocol, devices] of [
+    ['fs20', fs20Devices],
+    ['uniroll', unirollDevices],
+]) {
+    for (const device of devices) {
+        if (leftAlone(protocol, device.address)) {
+            log.warn(
+                `${protocol} device`,
+                device.name,
+                device.address,
+                'is left alone (--ignore / --only); not announced',
+            );
+        }
+    }
+}
+if (only.length > 0) {
+    log.info('only handling', only.join(', '));
+}
+if (ignore.length > 0) {
+    log.info('ignoring', ignore.join(', '));
+}
 
 /*
  * offline detection — devices that stop sending get a retained <protocol>/<address>/online item
@@ -356,6 +418,10 @@ async function handleSet(parts, value, topic) {
         log.warn('mqtt ignoring empty payload on', topic);
         return;
     }
+    if (setIgnored(parts, ignore, only)) {
+        log.warn('mqtt set', parts.join('/'), '- device is left alone (--ignore / --only), not sending');
+        return;
+    }
     if (String(parts[0]).toLowerCase() === 'fs20' && parts.length === 3 && fs20TimerIndex(parts[2]) !== undefined) {
         const address = String(parts[1]).trim().toUpperCase();
         if (!fs20DeviceByAddress.has(address)) {
@@ -441,6 +507,9 @@ async function handleSet(parts, value, topic) {
                 }
                 return;
             }
+        case 'uniroll':
+            log.info('cul > UNIRoll', command.group, command.device, command.cmd);
+            return cul.cmd('uniroll', command.group, command.device, command.cmd);
         case 'raw':
             log.debug('cul > raw', command.data);
             return cul.write(command.data);
@@ -677,6 +746,10 @@ function onData(raw, obj) {
     }
     if (obj.unknown) {
         log.debug('cul no parser for', obj.protocol, raw);
+        return;
+    }
+    if (leftAlone(obj.protocol, obj.address)) {
+        log.debug('cul ignoring', obj.protocol, obj.address, '(--ignore / --only)');
         return;
     }
     const items = itemsFor(obj);

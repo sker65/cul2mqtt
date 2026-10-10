@@ -227,3 +227,10 @@ describe('fhtClockItemsFromValue', () => {
         assert.deepEqual(fhtClockItemsFromValue('423c', 'minute', 60, parts), []);
     });
 });
+
+describe('itemsFor UNIRoll', () => {
+    test('the echo of a sent command publishes nothing', () => {
+        const obj = {protocol: 'UNIRoll', address: '12340', data: {group: '1234', device: '0', cmd: 'up'}};
+        assert.deepEqual(itemsFor(obj), []);
+    });
+});

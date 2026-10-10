@@ -104,6 +104,9 @@ description; its **Documentation** page contains the complete configuration and 
 | `-m, --map-file`                     |                    | JSON file with friendly item names (see below)                                   |
 | `--fht-central`                      |                    | FHT central code (4 hex digits), required for FHT commands and time sync         |
 | `--fht-init`                         | off                | set a new FHT without mode/target once to manual, 16 °C (see Home Assistant)     |
+| `--uniroll-devices`                  | `[]`               | JSON list of UNIRoll shutters announced as HA covers (see below)                 |
+| `--only`                             |                    | handle only these protocols / devices, e.g. `uniroll,em/0205` (see below)        |
+| `--ignore`                           |                    | protocols / devices to leave alone, e.g. `fht,fs20/6C4800` (see below)           |
 | `--offline-detection`                | on                 | mark silent devices offline on `cul/status/<protocol>/<address>/online`          |
 | `--learn-intervals`                  | on                 | widen offline timeouts from observed per-device message gaps                     |
 | `--state-dir`                        | `$STATE_DIRECTORY` | directory for persisted state (learned intervals); set by systemd                |
@@ -160,7 +163,10 @@ docker run -d --name cul2mqtt --restart unless-stopped --device /dev/ttyACM0 --g
 ```
 
 `--device` passes the CUL through, `--group-add` gives the unprivileged container user the
-serial port's group. A map file can be mounted and referenced with `CUL2MQTT_MAP_FILE`.
+serial port's group. A map file can be mounted and referenced with `CUL2MQTT_MAP_FILE`. State
+(learned offline intervals, FS20 timers) lives in the `/data` volume. A commented Compose file is in
+[docker-compose.example.yml](docker-compose.example.yml). Disable the maintenance topics with
+`CUL2MQTT_MAINTENANCE=false` (the `--no-` form does not exist as a variable).
 
 ### Run as a systemd service
 
@@ -301,12 +307,53 @@ alternatively JSON `{"cmd": "desired-temp", "value": 21.5}` on `cul/set/fht/<dev
 mosquitto_pub -t cul/set/fht/1234/desired-temp -m 21.5
 ```
 
+### `cul/set/uniroll/<group><device>`
+
+Moves a LoTT UNIRoll shutter (needs culfw ≥ 1.58). The address is the 4 hex digit group plus the
+1 hex digit device (`12340`, or `1234/0`); the payload is `up`, `down` or `stop` (`open` / `close`,
+as a Home Assistant cover sends them, work too). Anything else is rejected rather than sent.
+
+```
+mosquitto_pub -t cul/set/uniroll/12340 -m down
+```
+
+UNIRoll is send-only: the protocol has no preamble, so culfw cannot report received frames and
+there is no status topic — the position Home Assistant shows is optimistic. To get a cover entity,
+list the shutters in `--uniroll-devices` (`CUL2MQTT_UNIROLL_DEVICES`):
+
+```json
+[{"name": "Living room shutter", "address": "12340"}]
+```
+
 ### `cul/set/raw`
 
 With `--raw-set`, any culfw command line is written to the CUL (`F6C480011`, `X21`, ...). This is
 an unrestricted RF transmitter — protect your broker with authentication/ACLs before enabling it.
 `--publish-raw` does the opposite: every line received from the CUL is published on `cul/raw`
 (not retained), useful for unsupported protocols.
+
+### Moving devices over gradually: `--only` and `--ignore`
+
+Both options name protocols or single devices cul2mqtt leaves alone: nothing it hears from them is
+published (no status, events, offline tracking or discovery) and `set` requests to them are
+refused. Entries are a protocol (`fht`) or a device as it appears in the status topic
+(`fs20/6C4800`, `em/0205`), case-insensitive, separated by commas or spaces.
+
+- `--only` (`CUL2MQTT_ONLY`) is an allow list: everything not on it is left alone. Start with one
+  device and add entries as you move devices over from another central such as FHEM — devices it
+  still manages do not show up in Home Assistant twice, and neither do your neighbours' weather
+  stations.
+- `--ignore` (`CUL2MQTT_IGNORE`) is the opposite and wins over `--only`, e.g. once most devices have
+  moved: `--ignore 'fht fhttk'`.
+
+```
+cul2mqtt --only 'uniroll em/0205' ...
+```
+
+Both win over `--fs20-devices` / `--uniroll-devices` definitions. Announcements published before a
+device was left alone stay retained on the broker; delete the device in Home Assistant or publish an
+empty retained message on its `homeassistant/device/.../config` topic. `set/raw` and `cul/raw`
+(`--publish-raw`) are not filtered.
 
 ### Processed event monitor
 
@@ -350,8 +397,9 @@ mode and target as soon as the thermostat reports them. Each FHT
 device also has a **Sync time** button. It sends date and time only when explicitly pressed; it is
 never run automatically.
 
-FS20 is receive-only for the CUL, so actuators cannot be discovered and no switches are created
-automatically; an FS20 remote appears as a device with one sensor holding the last command.
+FS20 actuators do not report back, so they cannot be discovered; list them in `--fs20-devices` to
+get switches or lights with an optimistic state. An FS20 remote appears as a device with one sensor
+holding the last command. UNIRoll shutters listed in `--uniroll-devices` become covers.
 `--no-ha-discovery` disables discovery and removes all announcements on startup; `--ha-prefix`
 changes the discovery prefix.
 

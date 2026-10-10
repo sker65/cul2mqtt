@@ -400,3 +400,38 @@ describe("discoveryModel", () => {
     );
   });
 });
+
+describe("UNIRoll discovery", () => {
+  test("explicit UNIRoll shutters announce optimistic covers", () => {
+    const [, cover] = discoveryModel({
+      name: "cul",
+      items: new Map(),
+      unirollDevices: [{ name: "Living room shutter", address: "1234a" }],
+    });
+    assert.equal(cover.id, "cul2mqtt_cul_uniroll_1234A");
+    assert.equal(cover.device.name, "Living room shutter");
+    assert.equal(cover.device.via_device, "cul2mqtt_cul");
+    assert.equal(cover.device.mdl, "UNIRoll");
+    const c = cover.components.cover;
+    assert.equal(c.p, "cover");
+    assert.equal(c.cmd_t, "cul/set/uniroll/1234A");
+    assert.equal(c.pl_open, "up");
+    assert.equal(c.pl_cls, "down");
+    assert.equal(c.pl_stop, "stop");
+    assert.equal(c.opt, true);
+    assert.equal(c.stat_t, undefined);
+  });
+
+  test("invalid definitions are skipped, removed ones can be cleared", () => {
+    const devices = discoveryModel({
+      name: "cul",
+      items: new Map(),
+      unirollDevices: [{ name: "", address: "12340" }, { name: "x", address: "1234" }],
+    });
+    assert.equal(devices.length, 1);
+    assert.deepEqual(
+      normalizedDiscoveryIds({ name: "cul", items: new Map(), unirollDevices: [{ name: "x", address: "12340" }] }),
+      ["cul2mqtt_cul", "cul2mqtt_cul_uniroll_12340"],
+    );
+  });
+});

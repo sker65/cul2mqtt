@@ -15,7 +15,7 @@ consistent with lgtv2mqtt 3.0 (the reference adapter).
 
 `<name>/connected` (0/1/2), `<name>/status/<protocol>/<address>[/<field>]` (retained, `{val, ts, lc}`),
 `<name>/status/fs20/<address>` (event, not retained), `<name>/set/fs20/<address>`,
-`<name>/set/fht/<device>/<cmd>`, `<name>/set/raw` (opt-in), `<name>/info`,
+`<name>/set/fht/<device>/<cmd>`, `<name>/set/uniroll/<group><device>`, `<name>/set/raw` (opt-in), `<name>/info`,
 `<name>/maintenance/set/{loglevel,restart}`, `<name>/raw` (opt-in). Do not rename topics outside a
 major release.
 

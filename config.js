@@ -45,6 +45,19 @@ export const OPTIONS = {
         default: '[]',
         describe: 'JSON array of explicit FS20 switch/light definitions (name, address, type)',
     },
+    'uniroll-devices': {
+        type: 'string',
+        default: '[]',
+        describe: 'JSON array of UNIRoll shutters for Home Assistant covers (name, address = group + device, 5 hex)',
+    },
+    only: {
+        type: 'string',
+        describe: 'handle only these protocols or devices, e.g. "em/0205,uniroll" (everything else is left alone)',
+    },
+    ignore: {
+        type: 'string',
+        describe: 'protocols or devices to leave alone, e.g. "fht,fs20/6C4800" (not published, not sent to)',
+    },
     'offline-detection': {
         type: 'boolean',
         describe: 'mark silent devices offline on <protocol>/<address>/online (see README)',

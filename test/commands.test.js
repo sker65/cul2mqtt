@@ -81,3 +81,39 @@ describe('dimCommand', () => {
         assert.equal(dimCommand(250), 'dim100%');
     });
 });
+
+describe('commandFor uniroll', () => {
+    test('group + device as one or two topic parts', () => {
+        assert.deepEqual(commandFor(['uniroll', '1234a'], 'up'), {
+            type: 'uniroll',
+            group: '1234',
+            device: 'A',
+            cmd: 'up',
+        });
+        assert.deepEqual(commandFor(['uniroll', 'abcd', '0'], 'down'), {
+            type: 'uniroll',
+            group: 'ABCD',
+            device: '0',
+            cmd: 'down',
+        });
+    });
+
+    test('Home Assistant cover payloads', () => {
+        assert.equal(commandFor(['uniroll', '12340'], 'OPEN').cmd, 'up');
+        assert.equal(commandFor(['uniroll', '12340'], 'CLOSE').cmd, 'down');
+        assert.equal(commandFor(['uniroll', '12340'], 'STOP').cmd, 'stop');
+    });
+
+    test('rejects unknown commands instead of sending stop', () => {
+        assert.throws(() => commandFor(['uniroll', '12340'], 'toggle'), /unknown command/);
+        assert.throws(() => commandFor(['uniroll', '12340'], 50), /unknown command/);
+    });
+
+    test('rejects malformed addresses', () => {
+        assert.throws(() => commandFor(['uniroll', '1234'], 'up'), /address/);
+        assert.throws(() => commandFor(['uniroll', '123', '40'], 'up'), /address/);
+        assert.throws(() => commandFor(['uniroll', '12G40'], 'up'), /address/);
+        assert.throws(() => commandFor(['uniroll', '1234', '10'], 'up'), /address/);
+        assert.throws(() => commandFor(['uniroll'], 'up'), /address/);
+    });
+});
