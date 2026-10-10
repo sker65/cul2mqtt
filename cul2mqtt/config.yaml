@@ -24,6 +24,7 @@ options:
   coc: false
   scc: false
   fht_central: ''
+  fht_init: false
   fs20_devices: []
   instance_name: cul
   mqtt_url: ''
@@ -52,6 +53,7 @@ schema:
   coc: bool
   scc: bool
   fht_central: str
+  fht_init: bool
   fs20_devices:
     - name: str
       address: match(^[0-9A-Fa-f]{6}$)

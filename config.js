@@ -35,6 +35,11 @@ export const OPTIONS = {
         type: 'string',
         describe: 'FHT central code (4 hex digits) needed to send set/fht commands',
     },
+    'fht-init': {
+        type: 'boolean',
+        describe: 'set a newly seen FHT without mode/target once to manual, 16 °C (sends unasked!)',
+        default: false,
+    },
     'fs20-devices': {
         type: 'string',
         default: '[]',

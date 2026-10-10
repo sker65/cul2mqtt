@@ -738,7 +738,8 @@ function onData(raw, obj) {
                 if (!hasFhtField(address, 'mode')) {
                     publishFhtField(address, 'mode', 'MANU');
                 }
-            } else {
+            } else if (config.fhtInit) {
+                // opt-in: sending unasked would override a running schedule (e.g. one set by FHEM)
                 void initialiseFht(obj.address);
             }
         }

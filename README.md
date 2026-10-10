@@ -103,6 +103,7 @@ description; its **Documentation** page contains the complete configuration and 
 | `--host`, `--port`                   | , `2323`           | CUNO / CUNO2 via telnet instead of a serial port                                 |
 | `-m, --map-file`                     |                    | JSON file with friendly item names (see below)                                   |
 | `--fht-central`                      |                    | FHT central code (4 hex digits), required for FHT commands and time sync         |
+| `--fht-init`                         | off                | set a new FHT without mode/target once to manual, 16 °C (see Home Assistant)     |
 | `--offline-detection`                | on                 | mark silent devices offline on `cul/status/<protocol>/<address>/online`          |
 | `--learn-intervals`                  | on                 | widen offline timeouts from observed per-device message gaps                     |
 | `--state-dir`                        | `$STATE_DIRECTORY` | directory for persisted state (learned intervals); set by systemd                |
@@ -340,8 +341,12 @@ per-device `online` item: a device that stops sending becomes _unavailable_ in H
 An FHT80b that reports `measured_temp` also announces a native MQTT climate entity. Its target
 temperature uses `cul/set/fht/<hex-address>/desired-temp`; HA's `auto` maps to FHT `AUTO`, while
 HA's `heat` maps to FHT `MANU`. The existing FHT80TF contact discovery remains a binary sensor.
-When a newly discovered FHT has temperature but is missing either its mode or target temperature,
-CUL2MQTT sets it once to manual mode and 16 °C, then persists that initialisation marker. Each FHT
+cul2mqtt never sends to an FHT on its own unless you opt in: with `--fht-init` (and
+`--fht-central`), a newly discovered FHT that reports a temperature but has not yet reported both
+its mode and target temperature is set once to manual mode and 16 °C, and that initialisation
+marker is persisted in `--state-dir`. This overrides the thermostat's weekly program, so leave it
+off while another central (e.g. FHEM) still manages the FHTs — without it, the climate entity shows
+mode and target as soon as the thermostat reports them. Each FHT
 device also has a **Sync time** button. It sends date and time only when explicitly pressed; it is
 never run automatically.
 

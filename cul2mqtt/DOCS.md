@@ -39,7 +39,8 @@ Options are set in the app's **Configuration** page. Defaults are shown below.
 | `cul_mode`              | `SlowRF`        | Radio mode: `SlowRF`, `MORITZ`, or `AskSin`. Choose the mode matching the protocols and firmware in use.                                                                                            |
 | `coc`                   | `false`         | Enable for a Busware COC connected to a Raspberry Pi.                                                                                                                                               |
 | `scc`                   | `false`         | Enable for a Busware SCC connected to a Raspberry Pi.                                                                                                                                               |
-| `fht_central`           | empty           | Four-digit hexadecimal FHT central ID. The app sets this as the CUL's own FHT ID on connection. Required for FHT commands, time sync, first-time climate initialization, and FHT8V raw commands.    |
+| `fht_central`           | empty           | Four-digit hexadecimal FHT central ID. The app sets this as the CUL's own FHT ID on connection. Required for FHT commands, time sync, `fht_init`, and FHT8V raw commands.                           |
+| `fht_init`              | `false`         | Set a new thermostat without mode/target once to manual, 16 °C. Overrides its weekly program; off by default.                                                                                       |
 | `fs20_devices`          | `[]`            | FS20 devices to expose in Home Assistant. Define each with a `name`, six-digit hexadecimal `address`, optional `type` (`switch` or `light`), and optional `on_time` initial timer value in seconds. |
 | `instance_name`         | `cul`           | Prefix for MQTT topics and the MQTT client ID. Change it when another CUL2MQTT instance uses the same broker.                                                                                       |
 | `mqtt_url`              | empty           | Leave empty to use the Home Assistant MQTT service. For an external broker, set a URL such as `mqtt://broker:1883` or `mqtts://broker:8883`.                                                        |
@@ -103,8 +104,9 @@ supports target temperature and `auto`/`heat` modes (`auto` maps to FHT automati
 to manual mode). Current temperatures use °C. FHT80TF window contacts publish as binary sensors.
 Schedules and holiday mode are not currently exposed.
 
-If a newly discovered thermostat reports a temperature but is missing either its mode or target
-temperature, the app initializes it once to manual mode and 16 °C. Each thermostat also has a
+With `fht_init` enabled, a newly discovered thermostat that reports a temperature but is missing
+either its mode or target temperature is initialized once to manual mode and 16 °C. This is off by
+default because it overrides the weekly program. Each thermostat also has a
 **Sync time** button; time is sent only when that button is pressed. Set `fht_central` for these
 commands to work.
 

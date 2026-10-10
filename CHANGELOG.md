@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **FHT initialisation is opt-in (`--fht-init`, `CUL2MQTT_FHT_INIT`, off by default).** Before, a
+  newly seen FHT that reported a temperature before its mode and target temperature was set to
+  manual, 16 °C as soon as `--fht-central` was configured — on a first start usually every
+  thermostat in the house, overriding their weekly programs. Without the option cul2mqtt sends to
+  an FHT only when asked to (`set/fht/...`, climate entity, _Sync time_).
+
 ## 1.2.1
 
 ### Fixed
