@@ -7,7 +7,7 @@ import {createAdapter, createLogger, runDiscovery, autoAddress} from 'mqtt-inter
 import config from './config.js';
 import pkg from './package.json' with {type: 'json'};
 import {fhtClockItems, fhtClockItemsFromValue, fhtMeasuredTemperature, itemsFor, mapItem} from './lib/items.js';
-import {commandFor} from './lib/commands.js';
+import {commandFor, unirollSequence} from './lib/commands.js';
 import {fhtCommand, fhtRawCommand} from './lib/fht-command.js';
 import {optimisticFs20State} from './lib/fs20-state.js';
 import {fs20TimerDuration, isValidFs20TimerDuration} from './lib/fs20-timer.js';
@@ -42,6 +42,7 @@ handleInstall(config);
 const RECONNECT_MS = 10000;
 const OFFLINE_CHECK_MS = 10000;
 const STATE_SAVE_MS = 60000;
+const UNIROLL_GAP_MS = 100; // between the stop and the movement, as FHEM's sleep(0.1)
 
 let map;
 if (config.mapFile) {
@@ -88,6 +89,8 @@ function normaliseUnirollDevices(value) {
         address: String(device?.address || '')
             .trim()
             .toUpperCase(),
+        // FHEM's sendStopBeforeCmd, default on like there
+        stopBeforeCmd: device?.stop_before_cmd !== false,
     }));
     const addresses = new Set();
     for (const device of devices) {
@@ -507,9 +510,19 @@ async function handleSet(parts, value, topic) {
                 }
                 return;
             }
-        case 'uniroll':
-            log.info('cul > UNIRoll', command.group, command.device, command.cmd);
-            return cul.cmd('uniroll', command.group, command.device, command.cmd);
+        case 'uniroll': {
+            // only defined shutters get the stop first; a bare set/uniroll sends exactly what was asked
+            const definition = unirollDevices.find((device) => device.address === command.group + command.device);
+            const sequence = unirollSequence(command.cmd, definition ? definition.stopBeforeCmd : false);
+            for (const [index, cmd] of sequence.entries()) {
+                if (index > 0) {
+                    await new Promise((resolve) => setTimeout(resolve, UNIROLL_GAP_MS));
+                }
+                log.info('cul > UNIRoll', command.group, command.device, cmd);
+                await cul.cmd('uniroll', command.group, command.device, cmd);
+            }
+            return;
+        }
         case 'raw':
             log.debug('cul > raw', command.data);
             return cul.write(command.data);

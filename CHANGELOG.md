@@ -6,7 +6,7 @@
 
 - **UNIRoll send support**: `cul/set/uniroll/<group><device>` with `up` / `down` / `stop` (and the
   Home Assistant cover payloads `open` / `close`); `--uniroll-devices` announces the shutters as
-  optimistic HA covers. UNIRoll cannot be received, so there is no state.
+  optimistic HA covers, with FHEM's stop-before-command per shutter (`stop_before_cmd`, on by default). UNIRoll cannot be received, so there is no state.
 - **`--only`** (`CUL2MQTT_ONLY`) and **`--ignore`** (`CUL2MQTT_IGNORE`): protocols or devices
   (`uniroll`, `em/0205`, `fht`, `fs20/6C4800`) cul2mqtt handles exclusively, or neither publishes
   nor sends to — for moving devices over from another central such as FHEM one at a time.

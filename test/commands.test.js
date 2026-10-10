@@ -1,7 +1,7 @@
 import {test, describe} from 'node:test';
 import assert from 'node:assert/strict';
 
-import {commandFor, dimCommand} from '../lib/commands.js';
+import {commandFor, dimCommand, unirollSequence} from '../lib/commands.js';
 
 describe('commandFor fs20', () => {
     test('6 hex digit address, text / boolean / numeric commands', () => {
@@ -115,5 +115,20 @@ describe('commandFor uniroll', () => {
         assert.throws(() => commandFor(['uniroll', '12G40'], 'up'), /address/);
         assert.throws(() => commandFor(['uniroll', '1234', '10'], 'up'), /address/);
         assert.throws(() => commandFor(['uniroll'], 'up'), /address/);
+    });
+});
+
+describe('unirollSequence', () => {
+    test('stop first, like FHEM sendStopBeforeCmd 1', () => {
+        assert.deepEqual(unirollSequence('up'), ['stop', 'up']);
+        assert.deepEqual(unirollSequence('down', true), ['stop', 'down']);
+    });
+
+    test('stop alone is sent once', () => {
+        assert.deepEqual(unirollSequence('stop', true), ['stop']);
+    });
+
+    test('sendStopBeforeCmd 0', () => {
+        assert.deepEqual(unirollSequence('up', false), ['up']);
     });
 });

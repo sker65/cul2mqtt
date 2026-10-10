@@ -322,8 +322,17 @@ there is no status topic — the position Home Assistant shows is optimistic. To
 list the shutters in `--uniroll-devices` (`CUL2MQTT_UNIROLL_DEVICES`):
 
 ```json
-[{"name": "Living room shutter", "address": "12340"}]
+[
+  {"name": "Living room shutter", "address": "12340"},
+  {"name": "Garden shutter", "address": "12341", "stop_before_cmd": false}
+]
 ```
+
+Like FHEM's `sendStopBeforeCmd` (default `1`), a listed shutter gets a `stop` 100 ms before every
+`up` / `down`, so the command starts a movement instead of only stopping a running one;
+`"stop_before_cmd": false` sends the command alone (`sendStopBeforeCmd 0`). A bare
+`set/uniroll/...` to an address that is not listed sends exactly what was asked. FHEM's channel is
+the device digit as is: `define … UNIRoll 1234 2` is address `12342`.
 
 ### `cul/set/raw`
 
