@@ -38,7 +38,7 @@ major release.
 
 - Plain JavaScript ES modules, 4-space indentation, eslint + prettier (`npm run lint`). Let a failing
   lint stop you.
-- Run commands through WSL (Debian), not PowerShell; the repo lives at `~/repos/cul2mqtt`.
+- On Windows, run commands through WSL (Debian), not PowerShell; elsewhere use the native shell.
 - Minimal dependencies; this runs on a Raspberry Pi next to the CUL.
 - Never make defaults point at personal infrastructure or devices (no personal map file defaults).
 - Log raw traffic at `debug` with `cul <` / `cul >` prefixes; an unplugged CUL is `warn`, not `error`.
