@@ -93,38 +93,40 @@ description; its **Documentation** page contains the complete configuration and 
    app log. See the [Home Assistant app documentation](cul2mqtt/DOCS.md) for all configuration
    options, MQTT topics, maintenance functions, and protocol details.
 
-| option                               | default            | description                                                                      |
-| ------------------------------------ | ------------------ | -------------------------------------------------------------------------------- |
-| `-s, --serialport`                   | `/dev/ttyACM0`     | serial port of the CUL / COC / SCC, or `auto` (see above)                        |
-| `--discover`                         |                    | list the busware sticks on this host and exit (`--discover-json` for JSON)       |
-| `--baudrate`                         | `9600`             | serial baud rate (`38400` with `--coc` / `--scc`)                                |
-| `-c, --cul-mode`                     | `SlowRF`           | RF mode: `SlowRF` (FS20, HMS, EM, S300TH, FHT, ...), `MORITZ` (MAX!) or `AskSin` |
-| `--coc`, `--scc`                     | off                | device is a Busware COC / SCC on a Raspberry Pi                                  |
-| `--host`, `--port`                   | , `2323`           | CUNO / CUNO2 via telnet instead of a serial port                                 |
-| `-m, --map-file`                     |                    | JSON file with friendly item names (see below)                                   |
-| `--fht-central`                      |                    | FHT central code (4 hex digits), required for FHT commands and time sync         |
-| `--fht-init`                         | off                | set a new FHT without mode/target once to manual, 16 °C (see Home Assistant)     |
-| `--uniroll-devices`                  | `[]`               | JSON list of UNIRoll shutters announced as HA covers (see below)                 |
-| `--em-basis`                         |                    | JSON object of initial EM counter bases in pulses, e.g. `{"0205": 123456}`       |
-| `--only`                             |                    | handle only these protocols / devices, e.g. `uniroll,em/0205` (see below)        |
-| `--ignore`                           |                    | protocols / devices to leave alone, e.g. `fht,fs20/6C4800` (see below)           |
-| `--offline-detection`                | on                 | mark silent devices offline on `cul/status/<protocol>/<address>/online`          |
-| `--learn-intervals`                  | on                 | widen offline timeouts from observed per-device message gaps                     |
-| `--state-dir`                        | `$STATE_DIRECTORY` | directory for persisted state (learned intervals, EM counters, cover positions)  |
-| `--publish-raw`                      | off                | additionally publish every raw culfw line on `cul/raw`                           |
-| `--publish-events`                   | on                 | publish every parsed update on `cul/event/...` (not retained)                    |
-| `--raw-set`                          | off                | accept raw culfw commands on `cul/set/raw` (see below)                           |
-| `-u, --mqtt-url`                     | `mqtt://localhost` | broker URL, see [MQTT.js](https://github.com/mqttjs/MQTT.js#connect-using-a-url) |
-| `--mqtt-username`, `--mqtt-password` |                    | broker credentials                                                               |
-| `-n, --name`                         | `cul`              | instance name, used as topic prefix                                              |
-| `--json-payloads`                    | on                 | status as `{"val", "ts", "lc"}` JSON; `--no-json-payloads` for plain values      |
-| `--ha-discovery`                     | on                 | Home Assistant MQTT discovery (`--no-ha-discovery` disables and clears it)       |
-| `--ha-prefix`                        | `homeassistant`    | discovery prefix                                                                 |
-| `--no-maintenance`                   | (on)               | disable the `maintenance/set/loglevel` and `restart` topics (see below)          |
-| `--mqtt-client-id-prefix`            |                    | prefix for the mqtt client id                                                    |
-| `--mqtt-tls-ca`                      |                    | CA certificate file for `mqtts://` brokers                                       |
-| `--config-schema`                    |                    | print a JSON Schema of all options and exit                                      |
-| `-v, --verbosity`                    | `info`             | `error`, `warn`, `info`, `debug`                                                 |
+| option                               | default            | description                                                                                   |
+| ------------------------------------ | ------------------ | --------------------------------------------------------------------------------------------- |
+| `-s, --serialport`                   | `/dev/ttyACM0`     | serial port of the CUL / COC / SCC, or `auto` (see above)                                     |
+| `--discover`                         |                    | list the busware sticks on this host and exit (`--discover-json` for JSON)                    |
+| `--baudrate`                         | `9600`             | serial baud rate (`38400` with `--coc` / `--scc`)                                             |
+| `-c, --cul-mode`                     | `SlowRF`           | RF mode: `SlowRF` (FS20, HMS, EM, S300TH, FHT, ...), `MORITZ` (MAX!) or `AskSin`              |
+| `--coc`, `--scc`                     | off                | device is a Busware COC / SCC on a Raspberry Pi                                               |
+| `--host`, `--port`                   | , `2323`           | CUNO / CUNO2 via telnet instead of a serial port                                              |
+| `-m, --map-file`                     |                    | JSON file with friendly item names (see below)                                                |
+| `--fht-central`                      |                    | FHT central code (4 hex digits), required for FHT commands and time sync                      |
+| `--fht-init`                         | off                | set a new FHT without mode/target once to manual, 16 °C (see Home Assistant)                  |
+| `--uniroll-devices`                  | `[]`               | JSON list of UNIRoll shutters announced as HA covers (see below)                              |
+| `--em-basis`                         |                    | JSON object of initial EM counter bases in pulses, e.g. `{"0205": 123456}`                    |
+| `--only`                             |                    | handle only these protocols / devices, e.g. `uniroll,em/0205` (see below)                     |
+| `--ignore`                           |                    | protocols / devices to leave alone, e.g. `fht,fs20/6C4800` (see below)                        |
+| `--offline-detection`                | on                 | mark silent devices offline on `cul/status/<protocol>/<address>/online`                       |
+| `--learn-intervals`                  | on                 | widen offline timeouts from observed per-device message gaps                                  |
+| `--confirm-count`                    | `3`                | publish a new device only after this many telegrams within `--confirm-window` (`1` = at once) |
+| `--confirm-window`                   | `3600`             | seconds in which a new device must reach `--confirm-count` telegrams                          |
+| `--state-dir`                        | `$STATE_DIRECTORY` | directory for persisted state (learned intervals, EM counters, cover positions)               |
+| `--publish-raw`                      | off                | additionally publish every raw culfw line on `cul/raw`                                        |
+| `--publish-events`                   | on                 | publish every parsed update on `cul/event/...` (not retained)                                 |
+| `--raw-set`                          | off                | accept raw culfw commands on `cul/set/raw` (see below)                                        |
+| `-u, --mqtt-url`                     | `mqtt://localhost` | broker URL, see [MQTT.js](https://github.com/mqttjs/MQTT.js#connect-using-a-url)              |
+| `--mqtt-username`, `--mqtt-password` |                    | broker credentials                                                                            |
+| `-n, --name`                         | `cul`              | instance name, used as topic prefix                                                           |
+| `--json-payloads`                    | on                 | status as `{"val", "ts", "lc"}` JSON; `--no-json-payloads` for plain values                   |
+| `--ha-discovery`                     | on                 | Home Assistant MQTT discovery (`--no-ha-discovery` disables and clears it)                    |
+| `--ha-prefix`                        | `homeassistant`    | discovery prefix                                                                              |
+| `--no-maintenance`                   | (on)               | disable the `maintenance/set/loglevel` and `restart` topics (see below)                       |
+| `--mqtt-client-id-prefix`            |                    | prefix for the mqtt client id                                                                 |
+| `--mqtt-tls-ca`                      |                    | CA certificate file for `mqtts://` brokers                                                    |
+| `--config-schema`                    |                    | print a JSON Schema of all options and exit                                                   |
+| `-v, --verbosity`                    | `info`             | `error`, `warn`, `info`, `debug`                                                              |
 
 ### Finding the stick
 
@@ -232,6 +234,16 @@ names snake_case; `rssi` is published alongside when the CUL reports it.
 
 What exactly is published depends on the parsers in the [cul](https://github.com/hobbyquaker/cul)
 library.
+
+#### New devices
+
+A device heard for the first time is not published at once: only after `--confirm-count` telegrams
+(default 3) within `--confirm-window` seconds (default 3600) do its status topics and Home Assistant
+discovery appear. Until then cul2mqtt logs `cul unconfirmed device <protocol>/<address>`. A single
+garbled telegram therefore does not leave a phantom device in Home Assistant that never reports
+again. Telegrams less than 10 s apart count once, as many devices repeat each transmission at once. Devices named in the configuration (`--fs20-devices`, `--uniroll-devices`, an address in
+`--only`) count as confirmed; confirmed devices are remembered in `--state-dir`
+(`confirmed-devices.json`). `--confirm-count 1` publishes on the first telegram, as before.
 
 `cul/info` (retained JSON) describes the running instance: adapter name and version, implemented
 mqtt-smarthome spec version, node version, host, pid, start time, whether maintenance topics are on.

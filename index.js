@@ -17,6 +17,7 @@ import {OfflineTracker, timeoutsFromMap} from './lib/offline.js';
 import {handle as handleInstall} from './lib/install.js';
 import {discoveryHint} from './lib/discovery.js';
 import {EmCounters, parseEmBasis} from './lib/em-counter.js';
+import {DeviceConfirmation} from './lib/confirm.js';
 import {CLOSED, OPEN, TimedCover, normalisePosition, normaliseTiming, restingState} from './lib/cover-position.js';
 import {isIgnored, parseIgnore, setIgnored} from './lib/ignore.js';
 
@@ -323,6 +324,7 @@ function setFs20Devices(value) {
 loadFs20Timers();
 setFs20Devices(fs20Devices);
 setupTimedCovers();
+const confirmation = setupConfirmation();
 for (const [protocol, devices] of [
     ['fs20', fs20Devices],
     ['uniroll', unirollDevices],
@@ -833,6 +835,54 @@ function publishCoverPosition(key, position, state) {
     saveCoverPositions();
 }
 
+/*
+ * new devices: published only after --confirm-count telegrams within --confirm-window (lib/confirm.js)
+ */
+
+function confirmationFile() {
+    return config.stateDir ? path.join(config.stateDir, 'confirmed-devices.json') : null;
+}
+
+function setupConfirmation() {
+    const count = Number(config.confirmCount);
+    const windowSeconds = Number(config.confirmWindow);
+    if (!Number.isInteger(count) || count < 1) {
+        throw new Error('--confirm-count must be a whole number of at least 1');
+    }
+    if (!(windowSeconds > 0)) {
+        throw new Error('--confirm-window must be a positive number of seconds');
+    }
+    // devices named in the configuration count as confirmed
+    const known = [
+        ...only.filter((entry) => entry.includes('/')),
+        ...fs20Devices.map((device) => `fs20/${device.address}`),
+        ...unirollDevices.map((device) => `uniroll/${device.address}`),
+    ];
+    const result = new DeviceConfirmation({count, windowMs: windowSeconds * 1000, confirmed: known});
+    const file = confirmationFile();
+    if (file && fs.existsSync(file)) {
+        try {
+            result.load(JSON.parse(fs.readFileSync(file, 'utf8')));
+        } catch (err) {
+            log.warn('cannot read', file, '-', err.message);
+        }
+    }
+    return result;
+}
+
+function saveConfirmation() {
+    const file = confirmationFile();
+    if (!file) {
+        return;
+    }
+    try {
+        fs.mkdirSync(config.stateDir, {recursive: true});
+        fs.writeFileSync(file, JSON.stringify(confirmation.state()));
+    } catch (err) {
+        log.warn('cannot save', file, '-', err.message);
+    }
+}
+
 function setupTimedCovers() {
     const file = coverPositionFile();
     let saved = {};
@@ -1036,6 +1086,22 @@ function onData(raw, obj) {
     if (leftAlone(obj.protocol, obj.address)) {
         log.debug('cul ignoring', obj.protocol, obj.address, '(--ignore / --only)');
         return;
+    }
+    if (obj.address !== undefined && obj.address !== null && obj.address !== '') {
+        const device = DeviceConfirmation.key(obj.protocol, obj.address);
+        const {confirmed, newly, heard} = confirmation.seen(device);
+        if (!confirmed) {
+            log.info(
+                'cul unconfirmed device',
+                device,
+                `(${heard} of ${confirmation.count} telegrams within ${config.confirmWindow}s, not published)`,
+            );
+            return;
+        }
+        if (newly) {
+            log.info('cul device confirmed', device);
+            saveConfirmation();
+        }
     }
     const items = itemsFor(obj);
     const measuredTemperature = fhtMeasuredTemperature(obj, fhtMeasurementParts);

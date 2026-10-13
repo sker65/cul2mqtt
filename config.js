@@ -73,6 +73,16 @@ export const OPTIONS = {
         describe: 'widen offline timeouts from observed per-device message gaps',
         default: true,
     },
+    'confirm-count': {
+        type: 'number',
+        describe: 'publish a new device only after this many telegrams within --confirm-window (1 = at once)',
+        default: 3,
+    },
+    'confirm-window': {
+        type: 'number',
+        describe: 'seconds in which a new device must reach --confirm-count telegrams',
+        default: 3600,
+    },
     'state-dir': {
         type: 'string',
         describe: 'directory for persisted state, e.g. learned intervals (default: $STATE_DIRECTORY)',
