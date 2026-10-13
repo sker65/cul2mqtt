@@ -62,7 +62,8 @@ function normaliseFs20Devices(value) {
                 .toUpperCase(),
             type,
             on_time: Number(device?.on_time) || 0,
-            ...(type === 'cover' && {cover: normaliseCover(device)}),
+            // setFs20Devices() normalises again: keep the cover options of an already normalised entry
+            ...(type === 'cover' && {cover: device.cover ?? normaliseCover(device)}),
         };
     });
 }
