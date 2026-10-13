@@ -12,6 +12,9 @@
 Built on the [cul](https://github.com/hobbyquaker/cul) library and
 [mqtt-interfaces-core](https://github.com/hobbyquaker/mqtt-interfaces-core).
 
+FHT80b thermostats paired to an ELV FHZ1000 PC / FHZ1300 PC instead of a CUL: see the sister
+project [fhz2mqtt](https://github.com/sker65/fhz2mqtt).
+
 Upgrading from 0.1.x? Topics changed — see [CHANGELOG.md](CHANGELOG.md).
 
 ## Getting started
