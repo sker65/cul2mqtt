@@ -105,6 +105,7 @@ description; its **Documentation** page contains the complete configuration and 
 | `--fht-central`                      |                    | FHT central code (4 hex digits), required for FHT commands and time sync         |
 | `--fht-init`                         | off                | set a new FHT without mode/target once to manual, 16 °C (see Home Assistant)     |
 | `--uniroll-devices`                  | `[]`               | JSON list of UNIRoll shutters announced as HA covers (see below)                 |
+| `--em-basis`                         |                    | JSON object of initial EM counter bases in pulses, e.g. `{"0205": 123456}`       |
 | `--only`                             |                    | handle only these protocols / devices, e.g. `uniroll,em/0205` (see below)        |
 | `--ignore`                           |                    | protocols / devices to leave alone, e.g. `fht,fs20/6C4800` (see below)           |
 | `--offline-detection`                | on                 | mark silent devices offline on `cul/status/<protocol>/<address>/online`          |
@@ -223,7 +224,7 @@ names snake_case; `rssi` is published alongside when the CUL reports it.
 | protocol | devices                           | example topics                                                                                                                                                         |
 | -------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `fs20`   | FS20 remotes, sensors, actuators  | `cul/status/fs20/6C4800` — the received command (`on`, `off`, `toggle`, `dim50%`, ...) as an **event, not retained**; `cul/status/fs20/6C4800/time` for timer commands |
-| `em`     | EM1000 power / gas / water meters | `cul/status/em/0205/current`, `cul/status/em/0205/total`, `cul/status/em/0205/peak`                                                                                    |
+| `em`     | EM1000 power / gas / water meters | `cul/status/em/0205/current`, `cul/status/em/0205/total`, `cul/status/em/0205/cumulative` (see below), `cul/status/em/0205/peak`                                       |
 | `ws`     | S300TH, KS300, ...                | `cul/status/ws/1/temperature`, `cul/status/ws/1/humidity`                                                                                                              |
 | `hms`    | HMS100T, HMS100TF, ...            | `cul/status/hms/A5E3/temperature`, `cul/status/hms/A5E3/humidity`, `cul/status/hms/A5E3/battery`                                                                       |
 | `fht`    | FHT80b thermostats                | `cul/status/fht/1234/measured_temp`, `cul/status/fht/1234/desired_temp`, `cul/status/fht/1234/actuator`                                                                |
@@ -276,6 +277,20 @@ Event-only protocols (FS20 remotes ring when someone presses them, not on a sche
 marked offline unless a map file `timeout` opts them in. Learned intervals and last-seen times are
 persisted in `--state-dir` (systemd sets `$STATE_DIRECTORY=/var/lib/cul2mqtt/<name>`; without a
 state dir learning starts over on restart).
+
+### EM meter totals
+
+An EM1000 sends its pulse total as a 16-bit counter: it wraps at 65536 and starts again at 0 after
+a battery change. `cul/status/em/<address>/total` is that raw counter;
+`cul/status/em/<address>/cumulative` adds a basis kept per meter so the value only grows — like
+FHEM's CUL_EM: when the total drops, a previous total above 65000 counts as a wraparound (+65536),
+anything else as a reset (+ previous total). The basis is persisted in `--state-dir`
+(`em-counters.json`); without a state dir it starts over on restart.
+
+To continue a reading taken over from another system, set the initial basis in pulses with
+`--em-basis '{"0205": 123456}'` (from FHEM: the `basis` reading of the CUL_EM device). It is only
+used for meters without saved state. Conversion to m³ or kWh is up to the consumer, e.g. a Home
+Assistant template sensor.
 
 ### `cul/set/fs20/<address>`
 

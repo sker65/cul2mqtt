@@ -16,6 +16,7 @@ import {discoveryModel, normalizedDiscoveryIds} from './lib/hadiscovery.js';
 import {OfflineTracker, timeoutsFromMap} from './lib/offline.js';
 import {handle as handleInstall} from './lib/install.js';
 import {discoveryHint} from './lib/discovery.js';
+import {EmCounters, parseEmBasis} from './lib/em-counter.js';
 import {isIgnored, parseIgnore, setIgnored} from './lib/ignore.js';
 
 /*
@@ -123,6 +124,8 @@ const fhtInitialized = new Set();
 const fhtInitialising = new Set();
 const fhtStateFile = config.stateDir ? path.join(config.stateDir, 'fht-initialized.json') : null;
 const fs20TimerFile = config.stateDir ? path.join(config.stateDir, 'fs20-timers.json') : null;
+const emCounters = new EmCounters(parseEmBasis(config.emBasis));
+const emCounterFile = config.stateDir ? path.join(config.stateDir, 'em-counters.json') : null;
 
 const FS20_TIMER_COUNT = 5;
 
@@ -359,6 +362,45 @@ if (fhtStateFile && fs.existsSync(fhtStateFile)) {
     } catch (err) {
         log.warn('cannot read', fhtStateFile, '-', err.message);
     }
+}
+
+if (emCounterFile && fs.existsSync(emCounterFile)) {
+    try {
+        emCounters.load(JSON.parse(fs.readFileSync(emCounterFile, 'utf8')));
+    } catch (err) {
+        log.warn('cannot read', emCounterFile, '-', err.message);
+    }
+}
+
+function saveEmCounters() {
+    if (!emCounterFile) {
+        return;
+    }
+    try {
+        fs.mkdirSync(config.stateDir, {recursive: true});
+        fs.writeFileSync(emCounterFile, JSON.stringify(emCounters.state()));
+    } catch (err) {
+        log.warn('cannot save', emCounterFile, '-', err.message);
+    }
+}
+
+/** EM: basis + raw total, corrected for wraparound and resets (see lib/em-counter.js). */
+function emCumulative(obj, items) {
+    if (String(obj.protocol).toUpperCase() !== 'EM' || items.length === 0) {
+        return undefined;
+    }
+    const total = obj.data?.total;
+    if (!Number.isInteger(total) || total < 0) {
+        return undefined;
+    }
+    const {cumulative, changed, corrected} = emCounters.update(obj.address, total);
+    if (corrected) {
+        log.info('cul EM', obj.address, 'counter wrapped or reset at', total, '- cumulative', cumulative);
+    }
+    if (changed) {
+        saveEmCounters();
+    }
+    return {item: `em/${obj.address}/cumulative`, val: cumulative, retain: true};
 }
 
 function saveState() {
@@ -832,6 +874,8 @@ function onData(raw, obj) {
     const measuredTemperature = fhtMeasuredTemperature(obj, fhtMeasurementParts);
     if (measuredTemperature) items.push(measuredTemperature);
     items.push(...fhtClockItems(obj, fhtClockParts));
+    const cumulative = emCumulative(obj, items);
+    if (cumulative) items.push(cumulative);
     if (items.length === 0) {
         if (obj.address !== undefined) {
             log.debug(

@@ -27,6 +27,8 @@ major release.
   discovery when new items appear.
 - `lib/items.js` — pure: parsed cul message → items; map file lookup. Extend `SKIP` / special cases
   here when a protocol publishes garbage.
+- `lib/em-counter.js` — pure: EM 16-bit total → `cumulative` (wraparound / reset like FHEM's
+  CUL_EM `basis`), persisted in `--state-dir`, seeded by `--em-basis`.
 - `lib/commands.js` — pure: `set/<parts>` + payload → cul command (FS20, FHT, raw).
 - `lib/hadiscovery.js` — entity map from the seen items; `FIELDS` holds device classes/units.
 - `lib/install.js` — core installer with `SupplementaryGroups=dialout`.

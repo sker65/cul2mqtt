@@ -50,6 +50,11 @@ export const OPTIONS = {
         default: '[]',
         describe: 'JSON array of UNIRoll shutters for Home Assistant covers (name, address = group + device, 5 hex)',
     },
+    'em-basis': {
+        type: 'string',
+        describe:
+            'JSON object of initial EM counter bases in pulses, e.g. {"0205": 123456} (continues a meter reading)',
+    },
     only: {
         type: 'string',
         describe: 'handle only these protocols or devices, e.g. "em/0205,uniroll" (everything else is left alone)',
