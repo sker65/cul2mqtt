@@ -5,3 +5,4 @@ node_modules/
 # site-specific files (local runs, real device addresses)
 docker-compose.yml
 *.local.md
+.claude/settings.local.json
