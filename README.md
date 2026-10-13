@@ -110,7 +110,7 @@ description; its **Documentation** page contains the complete configuration and 
 | `--ignore`                           |                    | protocols / devices to leave alone, e.g. `fht,fs20/6C4800` (see below)           |
 | `--offline-detection`                | on                 | mark silent devices offline on `cul/status/<protocol>/<address>/online`          |
 | `--learn-intervals`                  | on                 | widen offline timeouts from observed per-device message gaps                     |
-| `--state-dir`                        | `$STATE_DIRECTORY` | directory for persisted state (learned intervals); set by systemd                |
+| `--state-dir`                        | `$STATE_DIRECTORY` | directory for persisted state (learned intervals, EM counters, cover positions)  |
 | `--publish-raw`                      | off                | additionally publish every raw culfw line on `cul/raw`                           |
 | `--publish-events`                   | on                 | publish every parsed update on `cul/event/...` (not retained)                    |
 | `--raw-set`                          | off                | accept raw culfw commands on `cul/set/raw` (see below)                           |
@@ -381,6 +381,35 @@ direction it sent last: `stop` repeats it, `open` / `close` in the direction alr
 sent again (it would stop), and the other direction is sent as is. A movement started by a remote
 or by the actuator's own end stop is not seen; with `run_time` a later `stop` is skipped instead
 of starting the motor again. The state in Home Assistant is optimistic, as for every FS20 actuator.
+
+### Cover positions from run times
+
+UNIRoll shutters and FS20 covers report nothing back. With the run times of a full movement in
+their definition, cul2mqtt keeps a position like FHEM's ROLLO module (`rl_type HomeKit`):
+
+```json
+{"name": "Living room shutter", "address": "12340", "seconds_open": 25, "seconds_close": 16}
+```
+
+| key             | default |                                                                        |
+| --------------- | ------- | ---------------------------------------------------------------------- |
+| `seconds_open`  |         | seconds from closed to fully open (FHEM `rl_secondsUp`)                |
+| `seconds_close` |         | seconds from open to fully closed (FHEM `rl_secondsDown`)              |
+| `switch_time`   | `0`     | pause in seconds between stopping and reversing (FHEM `rl_switchTime`) |
+| `calibrate`     | `open`  | end position the Calibrate button runs to: `open` or `close`           |
+
+The cover then publishes `cul/status/<protocol>/<address>/position` (0 = closed, 100 = open) and
+`.../state` (`opening`, `closing`, `open`, `closed`, `stopped`), and its command topic also takes a
+target position as a number. A position between the ends is reached by sending open / close and a
+stop after the share of the run time; an end position is left to the end stop. From an unknown
+position the cover first opens fully (or runs straight closed, if that is the target). The position is persisted in `--state-dir`
+(`cover-positions.json`). Operation at the cover itself (switch, remote) is not seen, so after that
+the position is off until the cover is next sent to an end position.
+
+To re-sync after that, `cul/set/<protocol>/<address>/calibrate` (any payload; a **Calibrate** button
+in Home Assistant) runs the cover to its `calibrate` end position for the full run time, whatever
+position is assumed.
+`cul/set/<protocol>/<address>/sync` with a position (0..100) sets it without moving anything.
 
 ### `cul/set/raw`
 

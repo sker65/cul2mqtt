@@ -17,6 +17,7 @@ import {OfflineTracker, timeoutsFromMap} from './lib/offline.js';
 import {handle as handleInstall} from './lib/install.js';
 import {discoveryHint} from './lib/discovery.js';
 import {EmCounters, parseEmBasis} from './lib/em-counter.js';
+import {CLOSED, OPEN, TimedCover, normalisePosition, normaliseTiming, restingState} from './lib/cover-position.js';
 import {isIgnored, parseIgnore, setIgnored} from './lib/ignore.js';
 
 /*
@@ -98,6 +99,8 @@ function normaliseUnirollDevices(value) {
             .toUpperCase(),
         // FHEM's sendStopBeforeCmd, default on like there
         stopBeforeCmd: device?.stop_before_cmd !== false,
+        // optional run times for a time-based position (seconds_open / seconds_close)
+        timing: normaliseTiming(device),
     }));
     const addresses = new Set();
     for (const device of devices) {
@@ -120,6 +123,9 @@ const fs20TimerValues = new Map();
 const fs20States = new Map();
 const fs20OffTimers = new Map();
 const fs20CoverMotion = new Map();
+/** `uniroll/<address>` / `fs20/<address>` → TimedCover, for covers with seconds_open / seconds_close */
+const timedCovers = new Map();
+const UNIROLL_ACTIONS = {open: 'up', close: 'down', stop: 'stop'};
 const fhtInitialized = new Set();
 const fhtInitialising = new Set();
 const fhtStateFile = config.stateDir ? path.join(config.stateDir, 'fht-initialized.json') : null;
@@ -233,6 +239,10 @@ const adapter = createAdapter({
         clearInterval(offlineTimer);
         clearInterval(stateTimer);
         saveState();
+        for (const cover of timedCovers.values()) {
+            cover.interrupt();
+        }
+        saveCoverPositions();
         if (!cul) {
             return;
         }
@@ -312,6 +322,7 @@ function setFs20Devices(value) {
 
 loadFs20Timers();
 setFs20Devices(fs20Devices);
+setupTimedCovers();
 for (const [protocol, devices] of [
     ['fs20', fs20Devices],
     ['uniroll', unirollDevices],
@@ -490,6 +501,26 @@ async function handleSet(parts, value, topic) {
         log.warn('mqtt set', parts.join('/'), '- device is left alone (--ignore / --only), not sending');
         return;
     }
+    // set/<protocol>/<address>/calibrate | sync for covers with a time-based position
+    if (parts.length === 3 && ['calibrate', 'sync'].includes(parts[2])) {
+        const key = `${String(parts[0]).toLowerCase()}/${String(parts[1]).trim().toUpperCase()}`;
+        const timed = timedCovers.get(key);
+        if (!timed) {
+            log.warn('mqtt set', parts.join('/'), '- not a cover with seconds_open / seconds_close');
+            return;
+        }
+        if (parts[2] === 'sync') {
+            log.info('cover', key, 'position set to', value, 'without moving');
+            timed.sync(value?.val ?? value);
+            return;
+        }
+        if (!cul || !cul.connected) {
+            throw new Error('cul not connected');
+        }
+        log.info('cover', key, 'calibrating: fully open for the full run time');
+        timed.calibrate().catch((err) => log.warn('cover', key, 'calibrate -', err.message));
+        return;
+    }
     if (String(parts[0]).toLowerCase() === 'fs20' && parts.length === 3 && fs20TimerIndex(parts[2]) !== undefined) {
         const address = String(parts[1]).trim().toUpperCase();
         if (!fs20TimerDevice(address)) {
@@ -536,7 +567,15 @@ async function handleSet(parts, value, topic) {
     }
     const cover = fs20Cover(parts, value);
     if (cover) {
-        const {address, definition, action} = cover;
+        const {address, definition, action, position} = cover;
+        const timed = timedCovers.get(`fs20/${address}`);
+        if (timed) {
+            if (!cul || !cul.connected) {
+                throw new Error('cul not connected');
+            }
+            runTimedCover(timed, `fs20/${address}`, action, position);
+            return;
+        }
         const {cmd, reason} = coverAction(definition.cover, action, fs20CoverMotion.get(address));
         if (!cmd) {
             log.info('FS20 cover', address, action, '- not sending:', reason);
@@ -591,17 +630,24 @@ async function handleSet(parts, value, topic) {
                 return;
             }
         case 'uniroll': {
-            // only defined shutters get the stop first; a bare set/uniroll sends exactly what was asked
-            const definition = unirollDevices.find((device) => device.address === command.group + command.device);
-            const sequence = unirollSequence(command.cmd, definition ? definition.stopBeforeCmd : false);
-            for (const [index, cmd] of sequence.entries()) {
-                if (index > 0) {
-                    await new Promise((resolve) => setTimeout(resolve, UNIROLL_GAP_MS));
-                }
-                log.info('cul > UNIRoll', command.group, command.device, cmd);
-                await cul.cmd('uniroll', command.group, command.device, cmd);
+            const address = command.group + command.device;
+            const timed = timedCovers.get(`uniroll/${address}`);
+            if (timed) {
+                const action = command.position === undefined ? COVER_ACTIONS[command.cmd] : 'position';
+                runTimedCover(timed, `uniroll/${address}`, action, command.position);
+                return;
             }
-            return;
+            if (command.position !== undefined) {
+                throw new Error(`set/uniroll ${address}: a position needs seconds_open / seconds_close`);
+            }
+            // only defined shutters get the stop first; a bare set/uniroll sends exactly what was asked
+            const definition = unirollDevices.find((device) => device.address === address);
+            return sendUniroll(
+                command.group,
+                command.device,
+                command.cmd,
+                definition ? definition.stopBeforeCmd : false,
+            );
         }
         case 'raw':
             log.debug('cul > raw', command.data);
@@ -709,6 +755,127 @@ function fs20Cover(parts, value) {
         .toLowerCase();
     if (definition?.type === 'cover' && ['open', 'close', 'stop'].includes(action)) {
         return {address, definition, action};
+    }
+    // a number is a target position (Home Assistant's set_position_topic), for timed covers only
+    if (definition?.cover?.timing && /^\d+(\.\d+)?$/.test(action)) {
+        return {address, definition, action: 'position', position: normalisePosition(action)};
+    }
+}
+
+/*
+ * covers with a time-based position (seconds_open / seconds_close): UNIRoll shutters and FS20 covers
+ */
+
+const COVER_ACTIONS = {up: 'open', down: 'close', stop: 'stop'};
+
+async function sendUniroll(group, device, cmd, stopBeforeCmd) {
+    for (const [index, step] of unirollSequence(cmd, stopBeforeCmd).entries()) {
+        if (index > 0) {
+            await new Promise((resolve) => setTimeout(resolve, UNIROLL_GAP_MS));
+        }
+        if (!cul || !cul.connected) {
+            throw new Error('cul not connected');
+        }
+        log.info('cul > UNIRoll', group, device, step);
+        await cul.cmd('uniroll', group, device, step);
+    }
+}
+
+/** FS20 actuators stop when the running direction command is repeated. */
+async function sendFs20Cover(definition, action, run) {
+    if (action === 'stop' && !run) {
+        log.info('FS20 cover', definition.address, 'stop - not moving, not sending');
+        return;
+    }
+    const cmd = definition.cover[action === 'stop' ? run.dir : action];
+    if (!cul || !cul.connected) {
+        throw new Error('cul not connected');
+    }
+    const command = commandFor(['fs20', definition.address], cmd);
+    log.info('cul > FS20', command.housecode, command.address, cmd, `(cover ${action})`);
+    await cul.cmd('FS20', command.housecode, command.address, cmd);
+}
+
+function runTimedCover(cover, key, action, position) {
+    log.info('cover', key, action === 'position' ? `to ${position}%` : action, 'from', cover.current() ?? 'unknown');
+    const job =
+        action === 'stop'
+            ? cover.stop()
+            : cover.moveTo(action === 'open' ? OPEN : action === 'close' ? CLOSED : position);
+    job.catch((err) => log.warn('cover', key, action, '-', err.message));
+}
+
+function coverPositionFile() {
+    return config.stateDir ? path.join(config.stateDir, 'cover-positions.json') : null;
+}
+
+function saveCoverPositions() {
+    const file = coverPositionFile();
+    if (!file) {
+        return;
+    }
+    try {
+        fs.mkdirSync(config.stateDir, {recursive: true});
+        const positions = Object.fromEntries([...timedCovers].map(([key, cover]) => [key, cover.current()]));
+        fs.writeFileSync(file, JSON.stringify(positions));
+    } catch (err) {
+        log.warn('cannot save', file, '-', err.message);
+    }
+}
+
+function publishCoverPosition(key, position, state) {
+    if (position !== null) {
+        pubStatus(`${key}/position`, position, {retain: true});
+    }
+    if (state) {
+        pubStatus(`${key}/state`, state, {retain: true});
+    }
+    saveCoverPositions();
+}
+
+function setupTimedCovers() {
+    const file = coverPositionFile();
+    let saved = {};
+    if (file && fs.existsSync(file)) {
+        try {
+            saved = JSON.parse(fs.readFileSync(file, 'utf8')) || {};
+        } catch (err) {
+            log.warn('cannot read', file, '-', err.message);
+        }
+    }
+    const covers = [
+        ...notIgnored('uniroll', unirollDevices)
+            .filter((device) => device.timing)
+            .map((device) => ({
+                key: `uniroll/${device.address}`,
+                timing: device.timing,
+                send: (action) =>
+                    sendUniroll(
+                        device.address.slice(0, 4),
+                        device.address.slice(4),
+                        UNIROLL_ACTIONS[action],
+                        device.stopBeforeCmd,
+                    ),
+            })),
+        ...notIgnored('fs20', fs20Devices)
+            .filter((device) => device.cover?.timing)
+            .map((device) => ({
+                key: `fs20/${device.address}`,
+                timing: device.cover.timing,
+                send: (action, run) => sendFs20Cover(device, action, run),
+            })),
+    ];
+    for (const {key, timing, send} of covers) {
+        const cover = new TimedCover({
+            timing,
+            position: saved[key],
+            send,
+            publish: ({position, state}) => publishCoverPosition(key, position, state),
+        });
+        timedCovers.set(key, cover);
+        if (cover.position !== null) {
+            publishCoverPosition(key, cover.position, restingState(cover.position));
+        }
     }
 }
 

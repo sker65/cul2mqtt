@@ -422,6 +422,34 @@ describe("UNIRoll discovery", () => {
     assert.equal(c.stat_t, undefined);
   });
 
+  test("shutters with run times report position and state and take a target position", () => {
+    const timing = { secondsOpen: 25, secondsClose: 16, switchMs: 0 };
+    const [, cover] = discoveryModel({
+      name: "cul",
+      items: new Map(),
+      unirollDevices: [{ name: "Shutter", address: "12340", timing }],
+    });
+    const c = cover.components.cover;
+    assert.equal(c.pos_t, "cul/status/uniroll/12340/position");
+    assert.equal(c.pos_tpl, "{{ value_json.val }}");
+    assert.equal(c.set_pos_t, "cul/set/uniroll/12340");
+    assert.equal(c.stat_t, "cul/status/uniroll/12340/state");
+    assert.equal(c.val_tpl, "{{ value_json.val }}");
+    assert.equal(c.opt, false);
+    assert.equal(cover.components.calibrate.p, "button");
+    assert.equal(cover.components.calibrate.cmd_t, "cul/set/uniroll/12340/calibrate");
+    const [, plain] = discoveryModel({
+      name: "cul",
+      items: new Map(),
+      jsonPayloads: false,
+      fs20Devices: [{ name: "Awning", address: "6C4800", type: "cover", cover: { deviceClass: "awning", timing } }],
+    });
+    assert.equal(plain.components.cover.pos_t, "cul/status/fs20/6C4800/position");
+    assert.equal(plain.components.cover.set_pos_t, "cul/set/fs20/6C4800");
+    assert.equal(plain.components.cover.pos_tpl, undefined);
+    assert.equal(plain.components.calibrate.cmd_t, "cul/set/fs20/6C4800/calibrate");
+  });
+
   test("invalid definitions are skipped, removed ones can be cleared", () => {
     const devices = discoveryModel({
       name: "cul",

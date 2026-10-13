@@ -29,6 +29,8 @@ major release.
   here when a protocol publishes garbage.
 - `lib/em-counter.js` — pure: EM 16-bit total → `cumulative` (wraparound / reset like FHEM's
   CUL_EM `basis`), persisted in `--state-dir`, seeded by `--em-basis`.
+- `lib/cover-position.js` — time-based position for UNIRoll / FS20 covers (`seconds_open` /
+  `seconds_close`, like FHEM's ROLLO); `TimedCover` runs the moves, index.js sends and persists.
 - `lib/commands.js` — pure: `set/<parts>` + payload → cul command (FS20, FHT, raw).
 - `lib/hadiscovery.js` — entity map from the seen items; `FIELDS` holds device classes/units.
 - `lib/install.js` — core installer with `SupplementaryGroups=dialout`.

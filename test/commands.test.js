@@ -106,7 +106,17 @@ describe('commandFor uniroll', () => {
 
     test('rejects unknown commands instead of sending stop', () => {
         assert.throws(() => commandFor(['uniroll', '12340'], 'toggle'), /unknown command/);
-        assert.throws(() => commandFor(['uniroll', '12340'], 50), /unknown command/);
+    });
+
+    test('a number is a target position', () => {
+        assert.deepEqual(commandFor(['uniroll', '12340'], 40), {
+            type: 'uniroll',
+            group: '1234',
+            device: '0',
+            position: 40,
+        });
+        assert.equal(commandFor(['uniroll', '12340'], '91').position, 91);
+        assert.throws(() => commandFor(['uniroll', '12340'], 150), /out of range/);
     });
 
     test('rejects malformed addresses', () => {
