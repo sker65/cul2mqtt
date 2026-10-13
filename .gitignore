@@ -2,7 +2,7 @@ node_modules/
 *.tgz
 .DS_Store
 
-# site-specific files (local runs, real device addresses)
+# local copy of docker-compose.example.yml
 docker-compose.yml
-*.local.md
+# personal Claude Code settings
 .claude/settings.local.json
