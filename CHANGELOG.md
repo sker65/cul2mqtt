@@ -14,6 +14,14 @@
   awning actuators) become optimistic HA covers. `open` / `close` map to an FS20 command each
   (`on` / `off` by default), `stop` repeats the running direction, which stops these actuators;
   `device_class` and an optional `run_time` per device.
+- **`--serialport tcp://<host>:<port>`**: a CUNO or a CUL on a serial-to-network converter
+  (Lantronix XPort, ser2net, ...), the same raw TCP connection as `--host` / `--port`.
+- Home Assistant app: builds the GitHub tag `v<version>` (the Supervisor builds with the app
+  folder as context, the previous build from the repository root could not work there); app
+  repository `sker65/cul2mqtt` with an "add repository" badge in the README; amd64 and aarch64
+  only, as the Home Assistant base image; app version follows `package.json`. New app options
+  `uniroll_devices`, `em_basis`, `only`, `ignore`, `confirm_count`, `confirm_window`; FS20 covers in
+  `fs20_devices`.
 - Docker: state in a `/data` volume (`CUL2MQTT_STATE_DIR`), `docker-compose.example.yml`.
 
 ### Changed
@@ -23,6 +31,11 @@
   manual, 16 °C as soon as `--fht-central` was configured — on a first start usually every
   thermostat in the house, overriding their weekly programs. Without the option cul2mqtt sends to
   an FHT only when asked to (`set/fht/...`, climate entity, _Sync time_).
+
+### Fixed
+
+- Home Assistant app: `fs20_devices` reached cul2mqtt as invalid JSON (`bashio::config` prints a
+  list element by element); the app now reads list options from `/data/options.json`.
 
 ## 1.2.1
 

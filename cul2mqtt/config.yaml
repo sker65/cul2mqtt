@@ -1,13 +1,11 @@
 name: CUL2MQTT
-version: '0.2.23'
+version: '1.2.1'
 slug: cul2mqtt
 description: Bridge culfw CUL, COC, SCC, and CUNO radios to MQTT and Home Assistant discovery
-url: https://github.com/yasapl/cul2mqtt
+url: https://github.com/sker65/cul2mqtt
 arch:
   - aarch64
   - amd64
-  - armv7
-  - armhf
 init: false
 uart: true
 udev: true
@@ -26,6 +24,12 @@ options:
   fht_central: ''
   fht_init: false
   fs20_devices: []
+  uniroll_devices: []
+  em_basis: []
+  only: ''
+  ignore: ''
+  confirm_count: 3
+  confirm_window: 3600
   instance_name: cul
   mqtt_url: ''
   mqtt_username: ''
@@ -57,8 +61,31 @@ schema:
   fs20_devices:
     - name: str
       address: match(^[0-9A-Fa-f]{6}$)
-      type: list(switch|light)?
+      type: list(switch|light|cover)?
       on_time: int?
+      open: str?
+      close: str?
+      device_class: str?
+      run_time: float(0,)?
+      seconds_open: float(0,)?
+      seconds_close: float(0,)?
+      switch_time: float(0,)?
+      calibrate: list(open|close)?
+  uniroll_devices:
+    - name: str
+      address: match(^[0-9A-Fa-f]{4}/?[0-9A-Fa-f]$)
+      stop_before_cmd: bool?
+      seconds_open: float(0,)?
+      seconds_close: float(0,)?
+      switch_time: float(0,)?
+      calibrate: list(open|close)?
+  em_basis:
+    - address: match(^[0-9A-Fa-f]{4}$)
+      pulses: int(0,)
+  only: str?
+  ignore: str?
+  confirm_count: int(1,)
+  confirm_window: int(1,)
   instance_name: str
   mqtt_url: str?
   mqtt_username: str?

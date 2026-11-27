@@ -51,10 +51,29 @@ fi
 if bashio::config.true 'fht_init'; then
     args+=(--fht-init)
 fi
-FS20_DEVICES="$(bashio::config 'fs20_devices')"
+# lists straight from the options: bashio::config prints an array element by element, not as JSON
+OPTIONS=/data/options.json
+FS20_DEVICES="$(jq -c '.fs20_devices // []' "${OPTIONS}")"
 if [ "${FS20_DEVICES}" != '[]' ]; then
     args+=(--fs20-devices "${FS20_DEVICES}")
 fi
+UNIROLL_DEVICES="$(jq -c '.uniroll_devices // []' "${OPTIONS}")"
+if [ "${UNIROLL_DEVICES}" != '[]' ]; then
+    args+=(--uniroll-devices "${UNIROLL_DEVICES}")
+fi
+# [{address, pulses}] → {"<address>": pulses}
+EM_BASIS="$(jq -c '(.em_basis // []) | map({(.address): .pulses}) | add // {}' "${OPTIONS}")"
+if [ "${EM_BASIS}" != '{}' ]; then
+    args+=(--em-basis "${EM_BASIS}")
+fi
+if bashio::config.has_value 'only'; then
+    args+=(--only "$(bashio::config 'only')")
+fi
+if bashio::config.has_value 'ignore'; then
+    args+=(--ignore "$(bashio::config 'ignore')")
+fi
+args+=(--confirm-count "$(bashio::config 'confirm_count')")
+args+=(--confirm-window "$(bashio::config 'confirm_window')")
 if bashio::config.true 'publish_raw'; then
     args+=(--publish-raw)
 fi

@@ -20,11 +20,13 @@ import {EmCounters, parseEmBasis} from './lib/em-counter.js';
 import {DeviceConfirmation} from './lib/confirm.js';
 import {CLOSED, OPEN, TimedCover, normalisePosition, normaliseTiming, restingState} from './lib/cover-position.js';
 import {isIgnored, parseIgnore, setIgnored} from './lib/ignore.js';
+import {parseTcpAddress} from './lib/tcp-address.js';
 
 /*
  * finding the stick (core B-2): --discover lists the busware sticks udev named, --serialport auto
  * uses the one it found. Before the installer on purpose: `--install -s auto` persists the by-id
- * path rather than scanning on every service start. A CUNO on the network is --host instead.
+ * path rather than scanning on every service start. A CUNO on the network is --host (or
+ * --serialport tcp://host:port) instead.
  */
 if (config.discover || config.serialport === 'auto') {
     const discoveryLog = createLogger({envPrefix: config.$envPrefix || 'CUL2MQTT', level: config.verbosity});
@@ -39,6 +41,18 @@ if (config.discover || config.serialport === 'auto') {
         discoveryLog.error('--serialport auto:', err.message);
         process.exit(1);
     }
+}
+
+// --serialport tcp://host:port: the same raw TCP connection as --host / --port
+try {
+    const tcp = parseTcpAddress(config.serialport);
+    if (tcp) {
+        config.host = tcp.host;
+        config.port = tcp.port;
+    }
+} catch (err) {
+    console.error('--serialport:', err.message);
+    process.exit(1);
 }
 
 handleInstall(config);

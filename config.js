@@ -6,7 +6,8 @@ export const OPTIONS = {
     serialport: {
         alias: 's',
         type: 'string',
-        describe: 'serial port of the CUL / COC / SCC, or "auto" to find the stick (see --discover)',
+        describe:
+            'serial port of the CUL / COC / SCC, tcp://host:port for a CUNO or a serial-to-network converter (XPort, ser2net), or "auto" to find the stick (see --discover)',
         default: '/dev/ttyACM0',
         discover: true,
     },
@@ -23,8 +24,11 @@ export const OPTIONS = {
     },
     coc: {type: 'boolean', describe: 'device is a Busware COC (Raspberry Pi)', default: false},
     scc: {type: 'boolean', describe: 'device is a Busware SCC (Raspberry Pi)', default: false},
-    host: {type: 'string', describe: 'CUNO / CUNO2 hostname or ip (telnet instead of serial port)'},
-    port: {type: 'number', describe: 'CUNO telnet port', default: 2323},
+    host: {
+        type: 'string',
+        describe: 'CUNO / CUNO2 or serial-to-network converter hostname or ip (raw TCP instead of serial port)',
+    },
+    port: {type: 'number', describe: 'TCP port for --host', default: 2323},
     'map-file': {
         alias: 'm',
         type: 'string',
@@ -113,7 +117,8 @@ export default parseConfig({
     examples: [
         ['$0 --discover', 'list the busware sticks plugged into this host and exit'],
         ['$0 -s /dev/ttyACM0 -u mqtt://broker', 'run in the foreground'],
-        ['$0 --host cuno.lan -u mqtt://broker', 'CUNO via telnet'],
+        ['$0 --host cuno.lan -u mqtt://broker', 'CUNO via TCP'],
+        ['$0 -s tcp://192.0.2.10:10001 -u mqtt://broker', 'CUL behind a serial-to-network converter'],
         ['sudo $0 --install -n cul -s /dev/ttyACM0 -u mqtt://broker', 'install as service cul2mqtt@cul'],
     ],
 });

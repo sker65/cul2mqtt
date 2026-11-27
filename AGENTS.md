@@ -36,8 +36,13 @@ major release.
 - `lib/commands.js` — pure: `set/<parts>` + payload → cul command (FS20, FHT, raw).
 - `lib/hadiscovery.js` — entity map from the seen items; `FIELDS` holds device classes/units.
 - `lib/install.js` — core installer with `SupplementaryGroups=dialout`.
+- `lib/tcp-address.js` — pure: `--serialport tcp://host:port` → host / port (same raw TCP as `--host`).
 - `config.js` — adapter options on top of the core `parseConfig()`; env prefix `CUL2MQTT_`.
 - `test/` — node:test unit tests for every `lib/` module (`npm test`).
+- `cul2mqtt/` — Home Assistant app (`config.yaml`, `Dockerfile`, `run.sh`, `DOCS.md`);
+  `repository.yaml` makes the repo an app repository. The Supervisor builds with `cul2mqtt/` as the
+  context, so the image downloads the GitHub tag `v<config.yaml version>` instead of copying the
+  checkout.
 - The RF protocol parsing lives in the `cul` package (`../cul` if checked out). Fix parsers there.
 
 ## Style & practices
@@ -58,3 +63,12 @@ major release.
 - `itemsFor()` is generic over the parser output; new protocols may publish meta fields until
   added to `SKIP`. `data.error` (parse failure) and `unknown: true` (no parser) messages are dropped.
 - Nothing in the set path is verified on hardware yet except what the `cul` README documents.
+
+## Release
+
+1. Bump `version` in `package.json` (`npm version --no-git-tag-version <x.y.z>`) and in
+   `cul2mqtt/config.yaml` (a test checks they match), and add a `## x.y.z` section to `CHANGELOG.md`.
+2. Commit, tag `vx.y.z`, and push commit and tag together. The Supervisor offers the app update as
+   soon as `config.yaml` changes on `main`, and its build downloads that tag.
+3. `.github/workflows/release.yml` runs lint and tests, builds the Docker image to ghcr.io and creates
+   the GitHub release. npm publishing runs only in the upstream repository, which owns the package.

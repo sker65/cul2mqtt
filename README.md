@@ -5,6 +5,8 @@
 [![CI](https://github.com/hobbyquaker/cul2mqtt/actions/workflows/ci.yml/badge.svg)](https://github.com/hobbyquaker/cul2mqtt/actions/workflows/ci.yml)
 [![License][gpl-badge]][gpl-url]
 
+[![Add the app repository to your Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fsker65%2Fcul2mqtt)
+
 > Interface between a [Busware](https://busware.de) CUL / COC / SCC / CUNO running
 > [culfw](http://culfw.de) and MQTT 📡 — FS20, EM1000, HMS, S300TH, FHT, MAX!, ... with Home
 > Assistant discovery
@@ -39,12 +41,14 @@ This repository can also be installed as a custom Home Assistant app. It runs un
 and packages the same CUL2MQTT functionality as the command-line project. It supports serial
 CUL/COC/SCC devices as well as network CUNO/CUL devices. The app's **Info** page includes a short
 description; its **Documentation** page contains the complete configuration and feature guide.
+The app builds the GitHub release tag `v<version>` of this repository, so app and command-line
+project are always in step.
 
-1. In Home Assistant, open **Settings → Apps → App Store**, open the menu, then add this custom
-   repository URL:
+1. Click the badge at the top, or in Home Assistant open **Settings → Apps → App Store**, open the
+   menu, then add this custom repository URL:
 
    ```
-   https://github.com/yasapl/cul2mqtt
+   https://github.com/sker65/cul2mqtt
    ```
 
 2. Install **CUL2MQTT**, then select one connection type:
@@ -98,12 +102,12 @@ description; its **Documentation** page contains the complete configuration and 
 
 | option                               | default            | description                                                                                   |
 | ------------------------------------ | ------------------ | --------------------------------------------------------------------------------------------- |
-| `-s, --serialport`                   | `/dev/ttyACM0`     | serial port of the CUL / COC / SCC, or `auto` (see above)                                     |
+| `-s, --serialport`                   | `/dev/ttyACM0`     | serial port of the CUL / COC / SCC, `tcp://host:port`, or `auto` (see above)                  |
 | `--discover`                         |                    | list the busware sticks on this host and exit (`--discover-json` for JSON)                    |
 | `--baudrate`                         | `9600`             | serial baud rate (`38400` with `--coc` / `--scc`)                                             |
 | `-c, --cul-mode`                     | `SlowRF`           | RF mode: `SlowRF` (FS20, HMS, EM, S300TH, FHT, ...), `MORITZ` (MAX!) or `AskSin`              |
 | `--coc`, `--scc`                     | off                | device is a Busware COC / SCC on a Raspberry Pi                                               |
-| `--host`, `--port`                   | , `2323`           | CUNO / CUNO2 via telnet instead of a serial port                                              |
+| `--host`, `--port`                   | , `2323`           | CUNO / CUNO2 or serial-to-network converter via raw TCP instead of a serial port              |
 | `-m, --map-file`                     |                    | JSON file with friendly item names (see below)                                                |
 | `--fht-central`                      |                    | FHT central code (4 hex digits), required for FHT commands and time sync                      |
 | `--fht-init`                         | off                | set a new FHT without mode/target once to manual, 16 °C (see Home Assistant)                  |
@@ -156,7 +160,21 @@ cul2mqtt -s auto -u mqtt://192.168.1.2
 Only sticks whose name contains both **busware** and **CUL** are recognised — that is what a
 CUL433/CUL868 looks like in `/dev/serial/by-id`. A CUN or COC, a nanoCUL, or any other vendor's
 culfw clone is named differently: give those to `--serialport` directly. A CUNO on the network is
-`--host` instead.
+`--host` instead (see below).
+
+### CUL on the network
+
+A CUNO / CUNO2, or a CUL on a serial-to-network converter (Lantronix XPort, ser2net, ESP-Link, ...),
+is reached over raw TCP: `--host <host> --port <port>`, or the same as one address,
+`-s tcp://<host>:<port>` (XPort default port: `10001`, CUNO: `2323`):
+
+```
+cul2mqtt -s tcp://192.0.2.10:10001 -u mqtt://192.168.1.2
+```
+
+A converter must pass the bytes through unchanged: raw TCP, not Telnet or RFC 2217, serial side at
+the CUL's baud rate (9600, 38400 for a COC / SCC) 8N1 without flow control. Most converters accept
+only one connection at a time.
 
 ### Docker
 

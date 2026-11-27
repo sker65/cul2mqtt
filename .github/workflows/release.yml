@@ -31,7 +31,9 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
-      - run: npm publish --provenance --access public
+      # the npm package cul2mqtt belongs to the upstream repository; forks only lint and test
+      - if: github.repository == 'hobbyquaker/cul2mqtt'
+        run: npm publish --provenance --access public
 
   docker:
     runs-on: ubuntu-latest
